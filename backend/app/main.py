@@ -31,23 +31,13 @@ app = FastAPI(
     },
 )
 
-# CORS 설정
-origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "https://my-reporter-assistant.vercel.app",
-    "https://my-reporter-assistant-git-main-salmon131.vercel.app",
-    "https://my-reporter-assistant-salmon131.vercel.app",
-    "https://my-reporter-assistant-*.vercel.app"
-]
-
+# CORS 설정 - 모든 도메인 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    max_age=3600,  # preflight 요청 캐시 시간 설정
+    allow_origins=["*"],  # 모든 도메인 허용
+    allow_credentials=False,  # 모든 도메인 허용시에는 False로 설정해야 함
+    allow_methods=["*"],  # 모든 HTTP 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
 )
 
 # 라우터 등록
