@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import router
 import uvicorn
 
-# FastAPI 앱 생성 - 더 자세한 메타데이터 추가
+# FastAPI 앱 생성
 app = FastAPI(
     title="AI 취재 디렉터 API",
     description="""
@@ -31,7 +31,7 @@ app = FastAPI(
     },
 )
 
-# CORS 설정 - 모든 도메인 허용
+# 라우터 등록 전에 CORS 미들웨어 추가
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 모든 도메인 허용
@@ -40,30 +40,29 @@ app.add_middleware(
     allow_headers=["*"],  # 모든 헤더 허용
 )
 
-# 라우터 등록
-app.include_router(router, prefix="/api")
+# 헬스 체크 엔드포인트
+@app.get("/health")
+@app.get("/api/health")  # 두 경로 모두 지원
+async def health_check():
+    return {"status": "healthy", "message": "API server is running"}
 
 # 루트 경로
-@app.get("/", tags=["Root"])
+@app.get("/")
 async def root():
     """API 루트 엔드포인트"""
     return {
         "message": "AI 취재 디렉터 API에 오신 것을 환영합니다!",
-        "docs": "/docs",
-        "redoc": "/redoc",
-        "health": "/api/v1/health"
+        "status": "healthy"
     }
+
+# API 라우터 등록
+app.include_router(router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=8000, 
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
         reload=True,
         log_level="info"
-    )
-
-# 헬스 체크 엔드포인트 추가
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "message": "API server is running"} 
+    ) 
