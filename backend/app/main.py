@@ -34,7 +34,12 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:3000"],  # 개발 서버 포트
+    allow_origins=[
+        "http://localhost:3001", 
+        "http://localhost:3000",
+        "https://my-reporter-assistant.vercel.app",
+        "https://my-reporter-assistant-*.vercel.app"  # 프리뷰 배포도 허용
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
