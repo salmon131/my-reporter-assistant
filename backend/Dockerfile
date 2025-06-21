@@ -21,4 +21,4 @@ COPY . .
 EXPOSE 8000
 
 # uvicorn으로 FastAPI 실행 (PORT 환경변수 우선, 없으면 8000)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000"]
