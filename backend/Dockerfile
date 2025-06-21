@@ -20,5 +20,5 @@ COPY . .
 # 포트 노출
 EXPOSE 8000
 
-# uvicorn으로 FastAPI 실행 (hot reload는 개발용, 운영시 reload 옵션 제거 가능)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# uvicorn으로 FastAPI 실행 (PORT 환경변수 우선, 없으면 8000)
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} 
