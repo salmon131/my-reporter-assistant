@@ -3,14 +3,17 @@ from fastapi.responses import JSONResponse
 from app.models import (
     SituationRequest, 
     DirectorResponse,
-    DeepDiveResponse, 
     PerspectiveResponse,
     ErrorResponse,
     TopicRequest,
-    PerspectiveRequest
+    PerspectiveRequest,
+    NewsSearchResponse,
+    NewsAnalyzeRequest,
+    NewsAnalyzeResponse
 )
-from app.gemini_utils import get_directing, get_deep_dive, get_perspective
+from app.gemini_utils import get_directing, get_perspective, search_naver_news, analyze_article_with_gemini
 import logging
+from google import genai
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -52,31 +55,82 @@ async def direct(request: SituationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/deep-dive",
-    summary="심화 분석",
-    description="주제에 대한 심화 분석을 제공합니다.",
-    response_model=DeepDiveResponse,
+# 1단계: 네이버 뉴스 유사 기사 검색
+@router.post("/news-search",
+    summary="네이버 뉴스 유사 기사 검색 결과 반환",
+    description="주제에 대해 네이버 뉴스에서 유사 기사 검색 결과의 원문 text를 반환합니다.",
+    response_model=NewsSearchResponse,
     responses={
         400: {"model": ErrorResponse, "description": "잘못된 요청"},
         500: {"model": ErrorResponse, "description": "서버 오류"}
     })
-async def deep_dive(request: TopicRequest):
-    """심화 분석 제공"""
+async def news_search(request: TopicRequest):
     try:
-        logger.info(f"심화 분석 요청: {request.topic}")
-        
+        logger.info(f"네이버 뉴스 검색 요청: {request.topic}")
         if not request.topic:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="분석할 주제를 입력해주세요."
+                detail="검색할 주제를 입력해주세요."
             )
-        
-        response = await get_deep_dive(request.topic)
-        logger.info("심화 분석 완료")
-        return response
-        
+        result_text = await search_naver_news(request.topic, max_results=3)
+        return NewsSearchResponse(news_articles=result_text)
     except Exception as e:
-        logger.error(f"심화 분석 오류: {str(e)}")
+        logger.error(f"네이버 뉴스 검색 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+# 2단계: Gemini 기사 분석
+@router.post("/news-analyze",
+    summary="네이버 뉴스 기사 Gemini 분석 결과 반환",
+    description="네이버 뉴스 기사 원문 텍스트를 받아 Gemini로 기사별 분석 및 종합 분석 결과를 반환합니다.",
+    response_model=NewsAnalyzeResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "잘못된 요청"},
+        500: {"model": ErrorResponse, "description": "서버 오류"}
+    })
+async def news_analyze(request: NewsAnalyzeRequest):
+    try:
+        logger.info("Gemini 기사 분석 요청")
+        if not request.news_articles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="기사 원문 텍스트를 입력해주세요."
+            )
+        analysis_result = await analyze_article_with_gemini(request.news_articles)
+        article_analyses = []
+        for idx, item in enumerate(analysis_result.get("analyses", [])):
+            article_analyses.append({
+                "article_index": idx,
+                "title": item.get("title", ""),
+                "angles": item.get("angles", []),
+                "issues": item.get("issues", []),
+                "framing": item.get("framing", None),
+                "implications": item.get("implications", [])
+            })
+        # 종합 분석
+        summary = ""
+        if article_analyses:
+            summary_prompt = f"아래는 여러 유사 기사에 대한 분석 결과입니다. 반복적으로 등장하는 쟁점, 공통된 프레임, 사회적 시사점, 차이점 등을 종합적으로 요약해줘.\n{article_analyses}"
+            try:
+                from app.gemini_utils import client
+                response = await client.aio.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=summary_prompt,
+                    config=genai.types.GenerateContentConfig(
+                        temperature=0.2,
+                    ),
+                )
+                summary = response.text.strip()
+            except Exception as e:
+                summary = f"종합 분석 오류: {e}"
+        return NewsAnalyzeResponse(
+            article_analyses=article_analyses,
+            summary=summary
+        )
+    except Exception as e:
+        logger.error(f"Gemini 기사 분석 오류: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

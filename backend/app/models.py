@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 # 요청 모델들
 class SituationRequest(BaseModel):
@@ -30,11 +30,34 @@ class SimilarCase(BaseModel):
     title: str = Field(..., description="사건 제목")
     summary: str = Field(..., description="사건 요약")
 
-class DeepDiveResponse(BaseModel):
-    background: str
-    keyPoints: List[str]
-    analysis: str
+class NewsArticle(BaseModel):
+    title: str
+    date: str
+    press: Optional[str] = None
+    url: Optional[str] = None
+    summary: Optional[str] = None
+    content: Optional[str] = None
+
+class ArticleAnalysis(BaseModel):
+    article_index: int  # NewsArticle의 인덱스
+    title: str
+    angles: List[str]
+    issues: List[str]
+    framing: Optional[str] = None
     implications: List[str]
+
+# 1단계: 네이버 뉴스 검색 결과 반환
+class NewsSearchResponse(BaseModel):
+    news_articles: str  # 네이버 뉴스에서 검색된 기사 원문 텍스트
+
+# 2단계: Gemini 기사 분석 요청
+class NewsAnalyzeRequest(BaseModel):
+    news_articles: str  # 1단계에서 받은 기사 원문 텍스트
+
+# 2단계: Gemini 기사 분석 결과
+class NewsAnalyzeResponse(BaseModel):
+    article_analyses: List[ArticleAnalysis]
+    summary: str
 
 class Perspective(BaseModel):
     viewpoint: str

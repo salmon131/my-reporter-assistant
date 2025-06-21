@@ -1,6 +1,6 @@
 import { DirectorResponse, DeepDiveResponse, PerspectiveResponse } from '@/types';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = 'http://localhost:8000';
 export const API_PREFIX = '/api';  // /v1 제거
 
 // 디버깅용 로그 함수
@@ -11,10 +11,7 @@ const debugLog = (message: string, data?: any) => {
 // API 서버 연결 테스트
 export async function testApiConnection(): Promise<{ success: boolean; message: string; details?: any }> {
   const testUrls = [
-    `${API_BASE_URL}/`,
-    `${API_BASE_URL}${API_PREFIX}/health`,
-    `${API_BASE_URL}/health`,
-    `${API_BASE_URL}/api/health`
+    `${API_BASE_URL}${API_PREFIX}/health`
   ];
 
   debugLog('API 연결 테스트 시작', { baseUrl: API_BASE_URL, testUrls });
@@ -23,10 +20,7 @@ export async function testApiConnection(): Promise<{ success: boolean; message: 
     try {
       debugLog(`테스트 중: ${url}`);
       const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        method: 'GET'
       });
       
       debugLog(`응답 상태: ${response.status}`, { url });
@@ -122,8 +116,7 @@ export async function getDeepDive(topic: string): Promise<DeepDiveResponse> {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(requestBody),
-      credentials: 'include',  // CORS 관련 설정 추가
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -158,4 +151,18 @@ export async function getPerspective(situation: string, perspective: string): Pr
   }
 
   return await response.json();
+}
+
+export async function getNewsSearch(topic: string) {
+  const url = `${API_BASE_URL}${API_PREFIX}/news-search`;
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+export async function getNewsAnalyze(news_articles: string[]) {
+  const url = `${API_BASE_URL}${API_PREFIX}/news-analyze`;
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ news_articles }) });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
 } 

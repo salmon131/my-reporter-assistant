@@ -1,0 +1,25 @@
+{
+    "mcpServers": {
+      "naver-search": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@isnow890/naver-search-mcp"
+        ],
+        "env": {
+          "NAVER_CLIENT_ID": "N0_XnayYPesgOcTS3Ae9",
+          "NAVER_CLIENT_SECRET": "xDMaSTrByr"
+        }
+      },
+      "notion": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@suekou/mcp-notion-server"
+        ],
+        "env": {
+          "NOTION_API_TOKEN": "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"
+        }
+      }
+    }
+  }

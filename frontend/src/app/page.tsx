@@ -6,20 +6,21 @@ import DirectorOutput from '@/components/DirectorOutput';
 import DeepDiveOutput from '@/components/DeepDiveOutput';
 import PerspectiveOutput from '@/components/PerspectiveOutput';
 import Notes from '@/components/Notes';
-import { getDirecting, getDeepDive, getPerspective, checkApiHealth, testApiConnection } from '@/lib/api';
-import { DirectorResponse, DeepDiveResponse, PerspectiveResponse } from '@/types';
+import { getDirecting, getDeepDive, getPerspective, checkApiHealth, testApiConnection, getNewsSearch, getNewsAnalyze } from '@/lib/api';
+import { DirectorResponse, PerspectiveResponse, NewsSearchResponse, NewsAnalyzeResponse } from '@/types';
+import ReactMarkdown from 'react-markdown';
 
 export default function Home() {
   // 상태 관리
   const [currentSituation, setCurrentSituation] = useState<string>('');
   const [directorResponse, setDirectorResponse] = useState<DirectorResponse | null>(null);
-  const [deepDiveResponse, setDeepDiveResponse] = useState<DeepDiveResponse | null>(null);
   const [perspectiveResponse, setPerspectiveResponse] = useState<PerspectiveResponse | null>(null);
   
   // 로딩 상태
   const [isDirectorLoading, setIsDirectorLoading] = useState(false);
-  const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
   const [isPerspectiveLoading, setIsPerspectiveLoading] = useState(false);
+  const [isNewsSearchLoading, setIsNewsSearchLoading] = useState(false);
+  const [isNewsAnalyzeLoading, setIsNewsAnalyzeLoading] = useState(false);
 
   // 에러 상태
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +28,12 @@ export default function Home() {
   // API 서버 상태 및 연결 테스트 상태
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [connectionDetails, setConnectionDetails] = useState<any>(null);
+
+  const [newsArticles, setNewsArticles] = useState<string[] | null>(null); // 1단계 결과
+  const [analyzeResult, setAnalyzeResult] = useState<NewsAnalyzeResponse | null>(null); // 2단계 결과
+
+  // 컴포넌트 함수 시작부에 추가
+  const [summaryOpen, setSummaryOpen] = useState(true);
 
   // API 연결 테스트
   const runApiTest = async () => {
@@ -57,11 +64,10 @@ export default function Home() {
     setIsDirectorLoading(true);
     setError(null);
     setCurrentSituation(situation);
-    
-    // 이전 결과 초기화
     setDirectorResponse(null);
-    setDeepDiveResponse(null);
     setPerspectiveResponse(null);
+    setNewsArticles(null);
+    setAnalyzeResult(null);
 
     try {
       const response = await getDirecting(situation);
@@ -72,21 +78,6 @@ export default function Home() {
       setError(err instanceof Error ? err.message : '디렉팅 요청 중 오류가 발생했습니다.');
     } finally {
       setIsDirectorLoading(false);
-    }
-  };
-
-  // 심화 분석 요청 처리
-  const handleDeepDive = async (topic: string) => {
-    try {
-      setIsDeepDiveLoading(true);
-      const response = await getDeepDive(topic);
-      setDeepDiveResponse(response);
-    } catch (error) {
-      console.error('심화 분석 요청 실패:', error);
-      // 사용자에게 에러 메시지 표시
-      setError(error instanceof Error ? error.message : '심화 분석 중 오류가 발생했습니다.');
-    } finally {
-      setIsDeepDiveLoading(false);
     }
   };
 
@@ -105,6 +96,43 @@ export default function Home() {
       setError(err instanceof Error ? err.message : '관점 확장 요청 중 오류가 발생했습니다.');
     } finally {
       setIsPerspectiveLoading(false);
+    }
+  };
+
+  // 1단계: 네이버 뉴스 기사 검색
+  const handleNewsSearch = async (topic?: string) => {
+    const searchTopic = topic || currentSituation;
+    if (!searchTopic) {
+      setError('상황이 입력되지 않았습니다.');
+      return;
+    }
+    setIsNewsSearchLoading(true);
+    setError(null);
+    setNewsArticles(null);
+    setAnalyzeResult(null);
+    try {
+      const response: NewsSearchResponse = await getNewsSearch(searchTopic);
+      setNewsArticles(response.news_articles);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '뉴스 검색 중 오류가 발생했습니다.');
+    } finally {
+      setIsNewsSearchLoading(false);
+    }
+  };
+
+  // 2단계: 기사별 분석
+  const handleNewsAnalyze = async () => {
+    if (!newsArticles) return;
+    setIsNewsAnalyzeLoading(true);
+    setError(null);
+    setAnalyzeResult(null);
+    try {
+      const response: NewsAnalyzeResponse = await getNewsAnalyze(newsArticles);
+      setAnalyzeResult(response);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '뉴스 분석 중 오류가 발생했습니다.');
+    } finally {
+      setIsNewsAnalyzeLoading(false);
     }
   };
 
@@ -225,21 +253,125 @@ export default function Home() {
             {directorResponse && (
               <DirectorOutput
                 response={directorResponse}
-                onDeepDive={handleDeepDive}
+                onDeepDive={() => handleNewsSearch()}
                 onPerspective={handlePerspective}
-                isDeepDiveLoading={isDeepDiveLoading}
+                isDeepDiveLoading={isNewsSearchLoading}
                 isPerspectiveLoading={isPerspectiveLoading}
               />
             )}
 
-            {/* 심화 분석 결과 */}
-            {deepDiveResponse && (
-              <DeepDiveOutput response={deepDiveResponse} />
+            {/* 1단계: 뉴스 기사 원문 리스트 표시 및 2단계 버튼 */}
+            {newsArticles && !analyzeResult && (
+              <div className="space-y-4 bg-white/80 border border-blue-100 rounded-2xl p-6 shadow-sm">
+                <h2 className="text-lg font-bold text-blue-800 mb-2">네이버 뉴스 기사 원문</h2>
+                {Array.isArray(newsArticles) ? (
+                  <ul className="space-y-2">
+                    {newsArticles.map((article, idx) => (
+                      <li key={idx} className="bg-blue-50 rounded p-3 text-blue-900 text-sm whitespace-pre-line">{article}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="prose max-w-none">
+                    <ReactMarkdown>{newsArticles}</ReactMarkdown>
+                  </div>
+                )}
+                <button
+                  className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+                  onClick={handleNewsAnalyze}
+                  disabled={isNewsAnalyzeLoading}
+                >
+                  {isNewsAnalyzeLoading ? '분석 중...' : '분석하기'}
+                </button>
+              </div>
             )}
 
-            {/* 관점 확장 결과 */}
-            {perspectiveResponse && (
-              <PerspectiveOutput response={perspectiveResponse} />
+            {/* 2단계: 분석 결과 표시 (NewsAnalyzeOutput 컴포넌트로 대체 예정) */}
+            {analyzeResult && (
+              <div className="space-y-8">
+                {/* 종합 요약 (마크다운, expander) */}
+                <div className="bg-gradient-to-br from-green-50 to-emerald-100 border border-emerald-200 rounded-3xl shadow-lg p-8 mb-8">
+                  <button
+                    className="flex items-center gap-2 mb-4 text-emerald-900 hover:text-emerald-700 font-extrabold text-2xl focus:outline-none"
+                    onClick={() => setSummaryOpen((v) => !v)}
+                    aria-expanded={summaryOpen}
+                    aria-controls="summary-content"
+                  >
+                    <svg className={`w-7 h-7 text-emerald-500 transition-transform duration-200 ${summaryOpen ? '' : '-rotate-90'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    종합 요약
+                    <span className="ml-2 text-base font-normal text-emerald-600">(클릭하여 {summaryOpen ? '접기' : '펼치기'})</span>
+                  </button>
+                  {summaryOpen && (
+                    <div id="summary-content" className="prose prose-emerald max-w-none text-lg animate-fade-in">
+                      <ReactMarkdown>{analyzeResult.summary}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+                {/* 기사별 분석 카드 */}
+                <div className="grid md:grid-cols-2 gap-8">
+                  {analyzeResult.article_analyses.map((a, idx) => (
+                    <div key={idx} className="bg-white/90 border border-gray-200 rounded-2xl shadow-md p-6 flex flex-col gap-3 hover:shadow-xl transition-shadow duration-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                        <span className="text-lg font-bold text-blue-900">{a.title}</span>
+                      </div>
+                      {/* angles */}
+                      {a.angles && a.angles.length > 0 && (
+                        <div className="mb-1">
+                          <div className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">
+                            보도 각도(Angle)
+                            <span className="text-gray-400" title="이 기사가 어떤 시각/관점에서 보도되었는지 요약한 키워드입니다.">ⓘ</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {a.angles.map((angle, i) => (
+                              <span key={i} className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full shadow-sm">{angle}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* issues */}
+                      {a.issues && a.issues.length > 0 && (
+                        <div className="mb-1">
+                          <div className="text-xs font-semibold text-rose-700 mb-1 flex items-center gap-1">
+                            쟁점(Issue)
+                            <span className="text-gray-400" title="이 기사에서 다루는 주요 쟁점, 논란, 사회적 문제 등입니다.">ⓘ</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {a.issues.map((issue, i) => (
+                              <span key={i} className="inline-block bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-1 rounded-full shadow-sm">{issue}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* framing */}
+                      {a.framing && (
+                        <div className="mb-1">
+                          <div className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1">
+                            프레이밍(Framing)
+                            <span className="text-gray-400" title="이 기사가 사건을 어떤 틀(프레임)로 해석·구성했는지 요약한 문장입니다.">ⓘ</span>
+                          </div>
+                          <blockquote className="border-l-4 border-emerald-400 pl-4 italic text-emerald-800 bg-emerald-50 rounded-lg my-2">
+                            {a.framing}
+                          </blockquote>
+                        </div>
+                      )}
+                      {/* implications */}
+                      {a.implications && a.implications.length > 0 && (
+                        <div className="mb-1">
+                          <div className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1">
+                            시사점(Implication)
+                            <span className="text-gray-400" title="이 기사로부터 도출되는 정책적, 사회적, 실천적 시사점입니다.">ⓘ</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {a.implications.map((imp, i) => (
+                              <span key={i} className="inline-block bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full shadow-sm">{imp}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
